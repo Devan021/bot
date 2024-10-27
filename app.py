@@ -11,22 +11,28 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# MongoDB Setup with proper escaping
+# MongoDB Setup
 username = urllib.parse.quote_plus("admin")
-password = urllib.parse.quote_plus("admin123@")  # Replace with your actual password
+password = urllib.parse.quote_plus("your_mongodb_password")
 MONGODB_URI = f"mongodb+srv://{username}:{password}@bot.csjsb.mongodb.net/?retryWrites=true&w=majority&appName=bot"
 
-# Initialize MongoDB client
-try:
-    client = MongoClient(MONGODB_URI)
-    db = client['healthcare_bot']
-    users_collection = db['users']
-    chats_collection = db['chats']
-    print("MongoDB connection successful!")
-except Exception as e:
-    print(f"MongoDB connection error: {e}")
+client = MongoClient(MONGODB_URI)
+db = client['healthcare_bot']
+users_collection = db['users']
+chats_collection = db['chats']
+
+def is_healthcare_related(message):
+    """Check if the query is healthcare related"""
+    healthcare_keywords = [
+        'health', 'medical', 'doctor', 'hospital', 'disease', 'symptom', 'pain',
+        'medicine', 'treatment', 'diagnosis', 'clinic', 'patient', 'nurse',
+        'therapy', 'surgery', 'prescription', 'infection', 'vaccine', 'blood',
+        'emergency', 'pharmacy', 'dental', 'cancer', 'diabetes', 'heart'
+    ]
+    return any(keyword in message.lower() for keyword in healthcare_keywords)
 
 def save_user(phone_number, data):
+    """Save user data to MongoDB"""
     try:
         users_collection.update_one(
             {'phone_number': phone_number},
@@ -37,13 +43,11 @@ def save_user(phone_number, data):
         print(f"Database error: {e}")
 
 def get_user(phone_number):
-    try:
-        return users_collection.find_one({'phone_number': phone_number})
-    except Exception as e:
-        print(f"Database error: {e}")
-        return None
+    """Get user data from MongoDB"""
+    return users_collection.find_one({'phone_number': phone_number})
 
 def save_chat(phone_number, message, response):
+    """Save chat history"""
     try:
         chats_collection.insert_one({
             'phone_number': phone_number,
@@ -54,26 +58,36 @@ def save_chat(phone_number, message, response):
     except Exception as e:
         print(f"Chat save error: {e}")
 
-def get_chat_history(phone_number, limit=5):
+def get_chat_history(phone_number):
+    """Get user's chat history"""
     try:
         chats = chats_collection.find(
             {'phone_number': phone_number}
-        ).sort('timestamp', -1).limit(limit)
+        ).sort('timestamp', -1).limit(5)
         return list(chats)
     except Exception as e:
         print(f"Chat retrieval error: {e}")
         return []
 
-def generate_response(message, phone_number):
+def generate_response(message, phone_number, user_data=None):
+    """Generate AI response"""
+    if not is_healthcare_related(message):
+        return "I apologize, but I can only assist with healthcare-related questions. Please ask something related to health or medical topics."
+
     try:
-        user = get_user(phone_number)
         chat_history = get_chat_history(phone_number)
-        
         context = ""
-        if user:
-            context += f"User conditions: {', '.join(user.get('conditions', []))}\n"
-            context += f"Current medications: {', '.join(user.get('medications', []))}\n"
         
+        if user_data:
+            context += f"User Profile:\nName: {user_data.get('name')}\n"
+            context += f"Age: {user_data.get('age')}\n"
+            context += f"Medical History: {user_data.get('medical_history', 'None')}\n\n"
+        
+        if chat_history:
+            context += "Recent conversations:\n"
+            for chat in chat_history:
+                context += f"Q: {chat['message']}\nA: {chat['response']}\n"
+
         headers = {
             "Authorization": f"Bearer {os.getenv('PERPLEXITY_API_KEY')}",
             "Content-Type": "application/json"
@@ -84,7 +98,7 @@ def generate_response(message, phone_number):
             "messages": [
                 {
                     "role": "system",
-                    "content": f"You are a healthcare assistant. Context: {context}"
+                    "content": f"You are a healthcare assistant. Use this context: {context}"
                 },
                 {
                     "role": "user",
@@ -104,50 +118,66 @@ def generate_response(message, phone_number):
             save_chat(phone_number, message, ai_response)
             return ai_response
         return "I apologize, but I couldn't process your request."
-            
+    
     except Exception as e:
         return f"Sorry, I encountered an error: {str(e)}"
 
 def handle_onboarding(phone_number, message):
+    """Handle user onboarding process"""
     user = get_user(phone_number)
     
     if not user:
-        user = {
+        # New user, start onboarding
+        save_user(phone_number, {
             'phone_number': phone_number,
-            'state': 'initial',
-            'conditions': [],
-            'medications': []
-        }
-        save_user(phone_number, user)
-        return "Welcome to SolveMyHealth! Do you have any medical conditions? (Yes/No)"
+            'state': 'welcome',
+            'created_at': datetime.datetime.utcnow()
+        })
+        return "Welcome to SolveMyHealth! Do you have an existing account? (Yes/No)"
     
-    if user['state'] == 'initial':
+    state = user.get('state', 'welcome')
+    
+    if state == 'welcome':
         if message.lower() == 'yes':
-            user['state'] = 'get_conditions'
-            save_user(phone_number, user)
-            return "Please list your medical conditions (separate by comma)"
+            # Existing user
+            chat_history = get_chat_history(phone_number)
+            if chat_history:
+                user['state'] = 'chat'
+                save_user(phone_number, user)
+                return "Welcome back! I found your previous conversations. How can I help you today?"
+            return "I couldn't find your chat history. Let's create a new profile. What's your name?"
+        
         elif message.lower() == 'no':
-            user['state'] = 'get_medications'
+            user['state'] = 'get_name'
             save_user(phone_number, user)
-            return "Do you take any medications? (Yes/No)"
+            return "Let's create your profile. What's your name?"
     
-    elif user['state'] == 'get_conditions':
-        conditions = [c.strip() for c in message.split(',')]
-        user['conditions'] = conditions
-        user['state'] = 'get_medications'
+    elif state == 'get_name':
+        user['name'] = message
+        user['state'] = 'get_age'
         save_user(phone_number, user)
-        return "What medications are you currently taking? (separate by comma, or type 'none')"
+        return f"Nice to meet you, {message}! What's your age?"
     
-    elif user['state'] == 'get_medications':
-        if message.lower() != 'none':
-            medications = [m.strip() for m in message.split(',')]
-            user['medications'] = medications
-            
+    elif state == 'get_age':
+        try:
+            age = int(message)
+            user['age'] = age
+            user['state'] = 'get_medical_history'
+            save_user(phone_number, user)
+            return "Do you have any medical conditions or ongoing treatments? Please describe briefly."
+        except ValueError:
+            return "Please enter a valid age (numbers only)"
+    
+    elif state == 'get_medical_history':
+        user['medical_history'] = message
         user['state'] = 'chat'
         save_user(phone_number, user)
-        return "Profile complete! You can now ask me health-related questions."
+        return "Thank you! Your profile is complete. How can I assist you with your health-related questions?"
     
-    return generate_response(message, phone_number)
+    elif state == 'chat':
+        return generate_response(message, phone_number, user)
+    
+    return "I'm not sure how to proceed. Let's start over. Do you have an account? (Yes/No)"
 
 @app.route('/', methods=['GET', 'POST'])
 def whatsapp():
@@ -162,14 +192,6 @@ def whatsapp():
         
         return str(resp)
     return "WhatsApp Webhook is running!"
-
-@app.route('/test-db', methods=['GET'])
-def test_db():
-    try:
-        dbs = client.list_database_names()
-        return f"Database connection successful! Available databases: {dbs}"
-    except Exception as e:
-        return f"Database connection failed: {str(e)}"
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
