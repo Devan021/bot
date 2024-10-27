@@ -11,7 +11,7 @@ load_dotenv()
 app = Flask(__name__)
 
 # Intialize E5-base-v2-model
-embedding_model = SentenceTransformer('intfloat'/e5-base-v2)
+embedding_model = SentenceTransformer('intfloat/e5-base-v2')
 
 #Intialize ChromeDB
 chroma_client= Client()
