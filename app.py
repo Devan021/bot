@@ -22,11 +22,11 @@ def generate_perplexity_response(message):
         }
         
         data = {
-            "model": "pplx-7b-online",  # or any other available model
+            "model": "llama-3.1-sonar-small-128k-online",  # or any other available model
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant. Keep responses concise and under 150 words."
+                    "content": "You are a healthcare assistant. Keep responses concise and under 150 words and give only healthcare advice if the topic is not related to healthcare say that I am sorry would you like me to connect to a human."
                 },
                 {
                     "role": "user",
