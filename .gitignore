@@ -1,0 +1,28 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Environment variables and keys
+.env
+*.env
+*.key
+
+# Flask specific
+instance/
+*.sqlite
+
+# Ignore log files
+*.log
+
+# Virtual environment folder
+venv/
+ENV/
+
+# Pytest cache
+.pytest_cache/
+
+# VS Code settings
+.vscode/
+
+# Ignore any sensitive files
+config.json
