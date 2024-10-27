@@ -3,10 +3,41 @@ from twilio.twiml.messaging_response import MessagingResponse
 import requests
 from dotenv import load_dotenv
 import os 
+import chromadb
 
 load_dotenv()
 
 app = Flask(__name__)
+
+# Intialize E5-base-v2-model
+embedding_model = SentenceTransformer('intfloat'/e5-base-v2)
+
+#Intialize ChromeDB
+chroma_client= Client()
+collection = chroma.client.create_collection(
+    name="healthcare_knowledge",
+    metadata={"hnsw:space": "cosine"}
+
+)
+
+# Add healthcare knowledge to ChromaDB
+healthcare_docs = [
+    "Diabetes is a metabolic disease affecting blood sugar levels.",
+    "Hypertension is high blood pressure that can lead to heart problems.",
+    "Common symptoms of COVID-19 include fever, cough, and fatigue.",
+    "Vaccines help prevent infectious diseases by stimulating immunity."
+]
+
+
+
+embeddings = embedding_model.encode(healthcare_docs)
+collection.add(
+    embeddings= embeddings.tolist(),
+    documents= healthcare_docs,
+    ids= [f"doc_{i}" for i in range(len(healthcare_docs))]
+)
+
+
 
 perplexity_api_key = os.getenv('PERPLEXITY_API_KEY')
 if not perplexity_api_key:
@@ -27,7 +58,22 @@ def generate_perplexity_response(message):
     try:
         if not is_healthcare_related(message):
             return "I apologize, but I can only assist with healthcare and medical-related questions. Please ask me something related to health or medical topics."
-            
+
+        query_with_prefix= f"query: {query}"
+
+        #Generate query embedding
+        query_embedding= embedding_model.encode(query_with_prefix)
+
+
+        # Search similar documents
+        results = collection.query(
+            query_embeddings=[query_embedding.tolist()],
+            n_results=2
+        )
+
+        context=" ".join(results['documents'][0])
+
+
         headers = {
             "Authorization": f"Bearer {perplexity_api_key}",
             "Content-Type": "application/json"
