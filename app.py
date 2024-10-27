@@ -1,6 +1,5 @@
 from flask import Flask, request 
 from twilio.twiml.messaging_response import MessagingResponse
-from twilio.rest import Client
 from openai import OpenAI
 from dotenv import load_dotenv
 import os 
@@ -10,21 +9,12 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Get environment variables
+# Get environment variables with default values
 openai_api_key = os.getenv('OPENAI_API_KEY')
 account_sid = os.getenv('TWILIO_ACCOUNT_SID')
 auth_token = os.getenv('TWILIO_AUTH_TOKEN')
 
-# Debug print statements
-print(f"TWILIO_ACCOUNT_SID exists: {bool(account_sid)}")
-print(f"TWILIO_AUTH_TOKEN exists: {bool(auth_token)}")
-
-# Check if credentials exist
-if not account_sid or not auth_token:
-    raise ValueError("Twilio credentials not found in environment variables")
-
-# Initialize clients
-client_twilio = Client(account_sid, auth_token)
+# Initialize OpenAI client
 client_openai = OpenAI(api_key=openai_api_key)
 
 def generate_openai_response(message):
@@ -53,5 +43,5 @@ def whatsapp():
     return "WhatsApp Webhook is running!", 200
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 9000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
