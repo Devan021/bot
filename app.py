@@ -2,6 +2,7 @@ from flask import Flask, request
 from twilio.twiml.messaging_response import MessagingResponse
 import requests
 from dotenv import load_dotenv
+from sentence_transformers import SentenceTransformer
 import os 
 import chromadb
 
