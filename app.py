@@ -6,7 +6,7 @@ import os
 
 app= Flask(__name__)
 
-openai.api_key='API_KEY_REMOVED'
+os.getenv('OPENAI_API_KEY')
 
 @app.route('/',methods = ['POST'])
 def whatsapp():
