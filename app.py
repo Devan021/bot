@@ -13,7 +13,7 @@ app = Flask(__name__)
 
 # MongoDB Setup with proper escaping
 username = urllib.parse.quote_plus("admin")
-password = urllib.parse.quote_plus("your_mongodb_password")  # Replace with your actual password
+password = urllib.parse.quote_plus("admin123@")  # Replace with your actual password
 MONGODB_URI = f"mongodb+srv://{username}:{password}@bot.csjsb.mongodb.net/?retryWrites=true&w=majority&appName=bot"
 
 # Initialize MongoDB client
