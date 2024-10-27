@@ -5,20 +5,20 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 import os 
 import chromadb
+from chromadb import Client
 
 load_dotenv()
 
 app = Flask(__name__)
 
-# Intialize E5-base-v2-model
+# Initialize E5-base-v2-model
 embedding_model = SentenceTransformer('intfloat/e5-base-v2')
 
-#Intialize ChromeDB
-chroma_client= Client()
-collection = chroma.client.create_collection(
+# Initialize ChromaDB
+chroma_client = chromadb.Client()
+collection = chroma_client.create_collection(
     name="healthcare_knowledge",
     metadata={"hnsw:space": "cosine"}
-
 )
 
 # Add healthcare knowledge to ChromaDB
@@ -29,23 +29,15 @@ healthcare_docs = [
     "Vaccines help prevent infectious diseases by stimulating immunity."
 ]
 
-
-
+# Create embeddings and add to collection
 embeddings = embedding_model.encode(healthcare_docs)
 collection.add(
-    embeddings= embeddings.tolist(),
-    documents= healthcare_docs,
-    ids= [f"doc_{i}" for i in range(len(healthcare_docs))]
+    embeddings=embeddings.tolist(),
+    documents=healthcare_docs,
+    ids=[f"doc_{i}" for i in range(len(healthcare_docs))]
 )
 
-
-
-perplexity_api_key = os.getenv('PERPLEXITY_API_KEY')
-if not perplexity_api_key:
-    raise ValueError("PERPLEXITY_API_KEY not found in environment variables")
-
 def is_healthcare_related(message):
-    # List of healthcare-related keywords
     healthcare_keywords = [
         'health', 'medical', 'doctor', 'hospital', 'disease', 'symptom', 'pain',
         'medicine', 'treatment', 'diagnosis', 'clinic', 'patient', 'nurse',
@@ -60,11 +52,8 @@ def generate_perplexity_response(message):
         if not is_healthcare_related(message):
             return "I apologize, but I can only assist with healthcare and medical-related questions. Please ask me something related to health or medical topics."
 
-        query_with_prefix= f"query: {query}"
-
-        #Generate query embedding
-        query_embedding= embedding_model.encode(query_with_prefix)
-
+        # Generate query embedding
+        query_embedding = embedding_model.encode(message)
 
         # Search similar documents
         results = collection.query(
@@ -72,11 +61,10 @@ def generate_perplexity_response(message):
             n_results=2
         )
 
-        context=" ".join(results['documents'][0])
-
-
+        context = " ".join(results['documents'][0])
+        
         headers = {
-            "Authorization": f"Bearer {perplexity_api_key}",
+            "Authorization": f"Bearer {os.getenv('PERPLEXITY_API_KEY')}",
             "Content-Type": "application/json"
         }
         
@@ -85,7 +73,7 @@ def generate_perplexity_response(message):
             "messages": [
                 {
                     "role": "system",
-                    "content": "You are a healthcare assistant. Only respond to healthcare and medical questions. If the question is not related to healthcare or medical topics, politely decline to answer. Keep responses concise and under 150 words."
+                    "content": f"You are a healthcare assistant. Use this context to answer: {context}"
                 },
                 {
                     "role": "user",
@@ -102,8 +90,7 @@ def generate_perplexity_response(message):
         
         if response.status_code == 200:
             return response.json()['choices'][0]['message']['content']
-        else:
-            return f"Error: {response.status_code} - {response.text}"
+        return f"Error: {response.status_code}"
             
     except Exception as e:
         return f"Sorry, I encountered an error: {str(e)}"
@@ -111,15 +98,12 @@ def generate_perplexity_response(message):
 @app.route('/', methods=['GET', 'POST'])
 def whatsapp():
     if request.method == 'POST':
-        try:
-            incoming_msg = request.values.get('Body', '').strip()
-            resp = MessagingResponse()
-            msg = resp.message()
-            ai_response = generate_perplexity_response(incoming_msg)
-            msg.body(ai_response)
-            return str(resp)
-        except Exception as e:
-            return str(MessagingResponse().message(f"Error: {str(e)}"))
+        incoming_msg = request.values.get('Body', '').strip()
+        resp = MessagingResponse()
+        msg = resp.message()
+        response = generate_perplexity_response(incoming_msg)
+        msg.body(response)
+        return str(resp)
     return "WhatsApp Webhook is running!", 200
 
 if __name__ == '__main__':
