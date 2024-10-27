@@ -1,22 +1,35 @@
 from flask import Flask , request 
 from twilio.twiml.messaging_response import MessagingResponse
+from twilio.rest import Client
 import openai 
 import requests
 import os 
+
 
 app= Flask(__name__)
 
 os.getenv('OPENAI_API_KEY')
 
-@app.route('/',methods = ['POST'])
+# Initialize Twilio client
+account_sid = 'AC918ceb3462ec0214eb181b00cde9590f'
+auth_token = 'fa920fc4ad226015fadcda1499a2ad23'
+client = Client(account_sid, auth_token)
+
+@app.route('/', methods=['GET', 'POST'])
 def whatsapp():
-    incoming_msg = request.values.get('Body','').strip()
-    resp = MessagingResponse()
-    msg= resp.message()
-    
-    response_text = generate_response(incoming_msg)
-    msg.body(response_text)
-    return str(resp)
+    if request.method == 'POST':
+        # Get the incoming message
+        incoming_msg = request.values.get('Body', '').strip()
+        # Get the sender's WhatsApp number
+        sender = request.values.get('From', '')
+        
+        # Create response
+        resp = MessagingResponse()
+        msg = resp.message()
+        msg.body("Hi I am Devan")
+        
+        return str(resp)
+    return "WhatsApp Webhook is running!", 200
 
 @app.route("/status", methods=['POST','GET'])
 def status():
@@ -27,7 +40,7 @@ def status():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0',port=(os.environ.get("PORT",5000)))
+    app.run(host='0.0.0.0',port=(os.environ.get("PORT",9000)))
 
 
 
