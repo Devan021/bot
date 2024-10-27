@@ -1,6 +1,6 @@
 from flask import Flask, request 
 from twilio.twiml.messaging_response import MessagingResponse
-from openai import OpenAI
+import requests
 from dotenv import load_dotenv
 import os 
 
@@ -9,37 +9,58 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# Get environment variables with default values
-openai_api_key = os.getenv('OPENAI_API_KEY')
-account_sid = os.getenv('TWILIO_ACCOUNT_SID')
-auth_token = os.getenv('TWILIO_AUTH_TOKEN')
+# Get Perplexity API key
+perplexity_api_key = os.getenv('PERPLEXITY_API_KEY')
+if not perplexity_api_key:
+    raise ValueError("PERPLEXITY_API_KEY not found in environment variables")
 
-# Initialize OpenAI client
-client_openai = OpenAI(api_key=openai_api_key)
-
-def generate_openai_response(message):
+def generate_perplexity_response(message):
     try:
-        completion = client_openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a healthcare assistant. Keep responses concise and under 150 words."},
-                {"role": "user", "content": message}
-            ],
-            max_tokens=150
+        headers = {
+            "Authorization": f"Bearer {perplexity_api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "pplx-7b-online",  # or any other available model
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant. Keep responses concise and under 150 words."
+                },
+                {
+                    "role": "user",
+                    "content": message
+                }
+            ]
+        }
+        
+        response = requests.post(
+            "https://api.perplexity.ai/chat/completions",
+            headers=headers,
+            json=data
         )
-        return completion.choices[0].message.content
+        
+        if response.status_code == 200:
+            return response.json()['choices'][0]['message']['content']
+        else:
+            return f"Error: {response.status_code} - {response.text}"
+            
     except Exception as e:
         return f"Sorry, I encountered an error: {str(e)}"
 
 @app.route('/', methods=['GET', 'POST'])
 def whatsapp():
     if request.method == 'POST':
-        incoming_msg = request.values.get('Body', '').strip()
-        resp = MessagingResponse()
-        msg = resp.message()
-        ai_response = generate_openai_response(incoming_msg)
-        msg.body(ai_response)
-        return str(resp)
+        try:
+            incoming_msg = request.values.get('Body', '').strip()
+            resp = MessagingResponse()
+            msg = resp.message()
+            ai_response = generate_perplexity_response(incoming_msg)
+            msg.body(ai_response)
+            return str(resp)
+        except Exception as e:
+            return str(MessagingResponse().message(f"Error: {str(e)}"))
     return "WhatsApp Webhook is running!", 200
 
 if __name__ == '__main__':
