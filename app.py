@@ -23,7 +23,7 @@ try:
     password = urllib.parse.quote_plus("admin123@")
     
     # Construct MongoDB URI with encoded credentials
-    mongodb_uri = f"mongodb+srv://{username}:{password}@bot.csjsb.mongodb.net/?retryWrites=true&w=majority&appName=bot"
+    mongodb_uri = f"mongodb+srv://{username}:{password}@aibot.vglpw.mongodb.net/?retryWrites=true&w=majority&appName=aibot"
     
     # Initialize MongoDB client with timeout settings
     client = MongoClient(
